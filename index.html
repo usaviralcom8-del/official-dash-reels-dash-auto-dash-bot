@@ -1,1 +1,152 @@
 DOCTYPE html, html lang equals en, head, meta charset UTF 8, viewport meta with width device width and initial scale 1, title USA Viral Video Maker, style में body font Arial, margin 20px, background color light gray, container class की max width 600px, margin auto, padding 16px, background white, border radius 8px, box shadow हल्का, button थोड़ा बड़ा, नीचे body में container div, h2 USA Viral Video Maker, file input multiple accept image star, audio file input accept audio star, number input for duration, button जिसके अंदर लिखा हो Create Video, 
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>USA Viral Video Maker</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:20px;background:#101827;color:white;font-family:Arial}
+main{max-width:600px;margin:auto;background:#1e293b;padding:22px;border-radius:16px}
+h1{text-align:center;color:#38bdf8}
+label{display:block;margin-top:18px}
+input,button{width:100%;padding:13px;margin-top:9px;border:0;border-radius:8px}
+button{background:#0284c7;color:white;font-size:17px;font-weight:bold}
+#status{color:#facc15}
+video{width:100%;margin-top:15px}
+a{display:block;color:#38bdf8;margin-top:15px}
+</style>
+</head>
+<body>
+<main>
+<h1>USA Viral Video Maker</h1>
+<p>अपनी फोटो और गाना चुनकर वीडियो बनाएं।</p>
+
+<label>अपनी फोटो चुनें</label>
+<input id="photos" type="file" accept="image/*" multiple>
+
+<label>अपना म्यूजिक चुनें</label>
+<input id="song" type="file" accept="audio/*">
+
+<label>हर फोटो कितने सेकंड दिखे?</label>
+<input id="seconds" type="number" value="3" min="1" max="20">
+
+<button id="make">वीडियो बनाएं</button>
+<p id="status">वीडियो बनाने के लिए फोटो चुनें।</p>
+<video id="preview" controls></video>
+<a id="save" hidden>वीडियो डाउनलोड करें</a>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+$("make").onclick = async () => {
+  const files = [...$("photos").files];
+  const duration = Number($("seconds").value);
+
+  if (!files.length) {
+    $("status").textContent = "पहले फोटो चुनें।";
+    return;
+  }
+  if (!Number.isFinite(duration) || duration < 1) {
+    $("status").textContent = "सही अवधि डालें।";
+    return;
+  }
+  if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
+    $("status").textContent = "यह ब्राउज़र वीडियो रिकॉर्डिंग सपोर्ट नहीं करता।";
+    return;
+  }
+
+  $("make").disabled = true;
+  $("status").textContent = "वीडियो बन रहा है...";
+
+  let audioContext;
+  let audioElement;
+  let recorder;
+
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1280;
+    canvas.height = 720;
+    const ctx = canvas.getContext("2d");
+    const stream = canvas.captureStream(30);
+
+    const audioFile = $("song").files[0];
+    if (audioFile) {
+      audioContext = new AudioContext();
+      await audioContext.resume();
+      audioElement = new Audio(URL.createObjectURL(audioFile));
+      audioElement.loop = true;
+      const source = audioContext.createMediaElementSource(audioElement);
+      const destination = audioContext.createMediaStreamDestination();
+      source.connect(destination);
+      destination.stream.getAudioTracks().forEach(track => stream.addTrack(track));
+      await audioElement.play();
+    }
+
+    const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+      ? "video/webm;codecs=vp9"
+      : "video/webm";
+
+    recorder = new MediaRecorder(stream, {mimeType:mime});
+    const chunks = [];
+
+    recorder.ondataavailable = event => {
+      if (event.data.size) chunks.push(event.data);
+    };
+
+    const stopped = new Promise(resolve => {
+      recorder.onstop = resolve;
+    });
+
+    recorder.start();
+
+    for (let i = 0; i < files.length; i++) {
+      const url = URL.createObjectURL(files[i]);
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const scale = Math.min(
+        canvas.width / img.width,
+        canvas.height / img.height
+      );
+      const w = img.width * scale;
+      const h = img.height * scale;
+      ctx.drawImage(img, (canvas.width-w)/2, (canvas.height-h)/2, w, h);
+
+      $("status").textContent = `फोटो ${i+1} / ${files.length}`;
+      await new Promise(resolve => setTimeout(resolve, duration * 1000));
+      URL.revokeObjectURL(url);
+    }
+
+    recorder.stop();
+    await stopped;
+
+    if (audioElement) audioElement.pause();
+    if (audioContext) await audioContext.close();
+
+    const blob = new Blob(chunks, {type:"video/webm"});
+    const videoURL = URL.createObjectURL(blob);
+
+    $("preview").src = videoURL;
+    $("save").href = videoURL;
+    $("save").download = "USA-Viral-Video.webm";
+    $("save").hidden = false;
+    $("status").textContent = "आपका वीडियो तैयार है।";
+
+  } catch (error) {
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    $("status").textContent = "वीडियो नहीं बन पाया। दोबारा कोशिश करें।";
+  } finally {
+    $("make").disabled = false;
+  }
+};
+</script>
+</body>
+</html>
